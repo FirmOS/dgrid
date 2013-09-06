@@ -157,6 +157,8 @@ define([
 			
 			this.inherited(arguments);
 			
+			if (this.reorderDisabled) return;
+			
 			// After header is rendered, set up a dnd source on each of its subrows.
 			
 			this._columnDndSources = [];

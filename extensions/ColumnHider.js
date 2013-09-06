@@ -119,6 +119,8 @@ function(declare, has, listen, miscUtil, put, i18n){
 			
 			this.inherited(arguments);
 			
+			if (this.hiderDisabled) return;
+			
 			if(!hiderMenuNode){ // first run
 				// Assume that if this plugin is used, then columns are hidable.
 				// Create the toggle node.
