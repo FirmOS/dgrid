@@ -49,7 +49,7 @@ directory structure like the following:
 * `util` (optional, e.g. if pursuing a custom build)
 
 dgrid works best with the latest revision of Dojo 1.7 or higher.  As of this
-writing, [Dojo 1.9.1](http://download.dojotoolkit.org/release-1.9.1/) is
+writing, [Dojo 1.9.2](http://download.dojotoolkit.org/release-1.9.2/) is
 recommended.
 
 Note that while dgrid supports Dojo 1.8 and 1.9 and may take advantage of features
@@ -82,7 +82,7 @@ Install the latest *geezer* version of Intern, which supports IE 6, 7, and 8
 in addition to modern browsers.
 
 ```
-npm install git+https://github.com/theintern/intern.git#1.2.0-geezer
+npm install intern-geezer
 ```
 
 ## Running via the browser
@@ -102,8 +102,52 @@ export SAUCE_ACCESS_KEY=<your_sauce_access_key>
 Then kick off the runner with the following command:
 
 ```
-node node_modules/intern/runner config=dgrid/test/intern/intern
+node node_modules/intern-geezer/runner config=dgrid/test/intern/intern
 ```
+
+## Running via local Selenium server
+
+### Windows
+
+Obtain the latest version of the Selenium server and the IE driver server from
+[Selenium's Download page](http://docs.seleniumhq.org/download/).  (The IE driver server needs to be
+placed in a folder on your PATH.)
+
+The Selenium server can be started by executing:
+
+```
+java -jar path\to\selenium-server-standalone-<version>.jar
+```
+
+### Mac OS X
+
+The easiest way to obtain the Selenium standalone server for Mac OS X is by
+using [Homebrew](http://brew.sh/).  Once Homebrew is installed, run the following
+commands:
+
+```sh
+brew update # ensure you have the lastest formulae
+brew install selenium-server-standalone
+brew install chromedriver # for automating tests in Chrome
+```
+
+Recent versions of `selenium-server-standalone` install a `selenium-server`
+script which can be used to start up the server.  For additional information
+(e.g. how to start the server at login), see the output of
+`brew info selenium-server-standalone`.
+
+### Running the tests
+
+Once the Selenium server is running, kick off the Intern test runner with the
+following command (run from the directory containing dgrid):
+
+```
+node node_modules/intern-geezer/runner config=dgrid/test/intern/intern.local
+```
+
+The configuration in `intern.local.js` overrides `intern.js` to not use
+Sauce Connect, and to attempt to run Firefox and Chrome by default (this can
+be customized as desired according to the browsers you have installed).
 
 # Community
 

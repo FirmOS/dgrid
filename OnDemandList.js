@@ -1,5 +1,5 @@
-define(["./List", "./_StoreMixin", "dojo/_base/declare", "dojo/_base/lang", "dojo/_base/Deferred", "dojo/on", "./util/misc", "put-selector/put"],
-function(List, _StoreMixin, declare, lang, Deferred, listen, miscUtil, put){
+define(["./List", "./_StoreMixin", "dojo/_base/declare", "dojo/_base/lang", "dojo/_base/Deferred", "dojo/dom", "dojo/on", "./util/misc", "put-selector/put"],
+function(List, _StoreMixin, declare, lang, Deferred, dom, listen, miscUtil, put){
 
 return declare([List, _StoreMixin], {
 	// summary:
@@ -38,7 +38,7 @@ return declare([List, _StoreMixin], {
 	//		Indicates the number of rows to overlap queries. This helps keep
 	//		continuous data when underlying data changes (and thus pages don't
 	//		exactly align)
-	queryRowsOverlap: 1,
+	queryRowsOverlap: 0,
 	
 	// pagingMethod: String
 	//		Method (from dgrid/util/misc) to use to either throttle or debounce
@@ -145,7 +145,8 @@ return declare([List, _StoreMixin], {
 		// Establish query options, mixing in our own.
 		// (The getter returns a delegated object, so simply using mixin is safe.)
 		options = lang.mixin(this.get("queryOptions"), options, 
-			{start: 0, count: this.minRowsPerPage, query: query});
+			{ start: 0, count: this.minRowsPerPage },
+			"level" in query ? { queryLevel: query.level } : null);
 		
 		// Protect the query within a _trackError call, but return the QueryResults
 		this._trackError(function(){ return results = query(options); });
@@ -166,7 +167,9 @@ return declare([List, _StoreMixin], {
 					noDataNode = self.noDataNode;
 				
 				put(loadingNode, "!");
-				self._total = total;
+				if(!("queryLevel" in options)){
+					self._total = total;
+				}
 				// now we need to adjust the height and total count based on the first result set
 				if(total === 0){
 					if(noDataNode){
@@ -192,6 +195,9 @@ return declare([List, _StoreMixin], {
 				}else{
 					// if total is 0, IE quirks mode can't handle 0px height for some reason, I don't know why, but we are setting display: none for now
 					preloadNode.style.display = "none";
+					// This is a hack to get Observable to recognize that this is the
+					// last page, like is done in the processScroll function
+					options.count++;
 				}
 				
 				if (self._previousScrollPosition) {
@@ -300,8 +306,14 @@ return declare([List, _StoreMixin], {
 		//		plugins that add connected elements to a row, like the tree
 		
 		var sibling = rowElement.previousSibling;
-		return sibling && sibling.offsetTop != rowElement.offsetTop ?
-			rowElement.offsetHeight : 0;
+		sibling = sibling && !/\bdgrid-preload\b/.test(sibling.className) && sibling;
+		
+		// If a previous row exists, compare the top of this row with the
+		// previous one (in case "rows" are actually rendering side-by-side).
+		// If no previous row exists, this is either the first or only row,
+		// in which case we count its own height.
+		return sibling ? rowElement.offsetTop - sibling.offsetTop :
+			rowElement.offsetHeight;
 	},
 	
 	lastScrollTop: 0,
@@ -487,19 +499,22 @@ return declare([List, _StoreMixin], {
 				}
 
 				adjustHeight(preload);
+				
+				// use the query associated with the preload node to get the next "page"
+				if("level" in preload.query){
+					options.queryLevel = preload.query.level;
+				}
+				
+				// Avoid spurious queries (ideally this should be unnecessary...)
+				if(!("queryLevel" in options) && (options.start > grid._total || options.count < 0)){
+					continue;
+				}
+				
 				// create a loading node as a placeholder while the data is loaded
 				var loadingNode = put(beforeNode, "-div.dgrid-loading[style=height:" + count * grid.rowHeight + "px]"),
 					innerNode = put(loadingNode, "div.dgrid-" + (below ? "below" : "above"));
 				innerNode.innerHTML = grid.loadingMessage;
 				loadingNode.count = count;
-				// use the query associated with the preload node to get the next "page"
-				options.query = preload.query;
-				
-				// Avoid spurious queries (ideally this should be unnecessary...)
-				if(options.start > grid._total || options.count < 0){
-					console.log("Skipping query", options, grid._total);
-					continue;
-				}
 				
 				// Query now to fill in these rows.
 				// Keep _trackError-wrapped results separate, since if results is a
@@ -538,7 +553,9 @@ return declare([List, _StoreMixin], {
 						}
 						
 						Deferred.when(results.total || results.length, function(total){
-							grid._total = total;
+							if(!("queryLevel" in options)){
+								grid._total = total;
+							}
 							if(below){
 								// if it is below, we will use the total from the results to update
 								// the count of the last preload in case the total changes as later pages are retrieved
@@ -546,6 +563,13 @@ return declare([List, _StoreMixin], {
 								
 								// recalculate the count
 								below.count = total - below.node.rowIndex;
+								// check to see if we are on the last page
+								if(below.count === 0){
+									// This is a hack to get Observable to recognize that this is the
+									// last page; if the count doesn't match results.length, Observable
+									// will think this is the last page and properly handle additions to the bottom
+									options.count++;
+								}
 								// readjust the height
 								adjustHeight(below);
 							}
@@ -595,11 +619,25 @@ return declare([List, _StoreMixin], {
 			}
 
 			// Is this row's observer index different than those on either side?
-			if(thisIndex > -1 && thisIndex !== prevIndex && thisIndex !== nextIndex){
+			if(this.cleanEmptyObservers && thisIndex > -1 && thisIndex !== prevIndex && thisIndex !== nextIndex){
 				// This is the last row that references the observer index.  Cancel the observer.
 				var observers = this.observers;
 				var observer = observers[thisIndex];
 				if(observer){
+					// justCleanup is set to true when the list is being cleaned out.  The rows are left in the DOM
+					// and later they are removed altogether.  Skip the check for overlapping rows because
+					// in the end, all of the rows will be removed and all of the observers need to be canceled.
+					if(!justCleanup){
+					// We need to verify that all the rows really have been removed. If there
+					// are overlapping rows, it is possible another element exists
+						var rows = observer.rows;
+						for(var i = 0; i < rows.length; i++){
+							if(rows[i] != rowElement && dom.isDescendant(rows[i], this.domNode)){
+								// still rows in this list, abandon
+								return this.inherited(arguments);
+							}
+						}
+					}
 					observer.cancel();
 					this._numObservers--;
 					observers[thisIndex] = 0; // remove it so we don't call cancel twice

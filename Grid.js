@@ -20,7 +20,7 @@ function(kernel, declare, listen, has, put, List, miscUtil){
 		column: function(target){
 			// summary:
 			//		Get the column object by node, or event, or a columnId
-			if(typeof target == "string"){
+			if(typeof target != "object"){
 				return this.columns[target];
 			}else{
 				return this.cell(target).column;
@@ -75,7 +75,7 @@ function(kernel, declare, listen, has, put, List, miscUtil){
 			}
 		},
 		
-		createRowCells: function(tag, each, subRows){
+		createRowCells: function(tag, each, subRows, object){
 			// summary:
 			//		Generates the grid for each row (used by renderHeader and and renderRow)
 			var row = put("table.dgrid-row-table[role=presentation]"),
@@ -84,7 +84,8 @@ function(kernel, declare, listen, has, put, List, miscUtil){
 				tbody = (has("ie") < 9 || has("quirks")) ? put(row, "tbody") : row,
 				tr,
 				si, sl, i, l, // iterators
-				subRow, column, id, extraClassName, cell, innerCell, colSpan, rowSpan; // used inside loops
+				subRow, column, id, extraClasses, className,
+				cell, innerCell, colSpan, rowSpan; // used inside loops
 			
 			// Allow specification of custom/specific subRows, falling back to
 			// those defined on the instance.
@@ -98,16 +99,23 @@ function(kernel, declare, listen, has, put, List, miscUtil){
 				if(subRow.className){
 					put(tr, "." + subRow.className);
 				}
-				
+
 				for(i = 0, l = subRow.length; i < l; i++){
 					// iterate through the columns
 					column = subRow[i];
 					id = column.id;
-					extraClassName = column.className || (column.field && "field-" + column.field);
+
+					extraClasses = column.field ? ".field-" + column.field : "";
+					className = typeof column.className === "function" ?
+						column.className(object) : column.className;
+					if(className){
+						extraClasses += "." + className;
+					}
+
 					cell = put(tag + (
 							".dgrid-cell.dgrid-cell-padding" +
 							(id ? ".dgrid-column-" + id : "") +
-							(extraClassName ? "." + extraClassName : "")
+							extraClasses.replace(/ +/g, ".")
 						).replace(invalidClassChars,"-") +
 						"[role=" + (tag === "th" ? "columnheader" : "gridcell") + "]");
 					cell.columnId = id;
@@ -161,7 +169,7 @@ function(kernel, declare, listen, has, put, List, miscUtil){
 				}else{
 					defaultRenderCell.call(column, object, data, td, options);
 				}
-			}, options && options.subRows);
+			}, options && options.subRows, object);
 			// row gets a wrapper div for a couple reasons:
 			//	1. So that one can set a fixed height on rows (heights can't be set on <table>'s AFAICT)
 			// 2. So that outline style can be set on a row when it is focused, and Safari's outline style is broken on <table>
@@ -383,13 +391,14 @@ function(kernel, declare, listen, has, put, List, miscUtil){
 					column.field = columnId;
 				}
 				columnId = column.id = column.id || (isNaN(columnId) ? columnId : (prefix + columnId));
-				if(isArray){ this.columns[columnId] = column; }
-				
 				// allow further base configuration in subclasses
 				if(this._configColumn){
 					this._configColumn(column, columnId, rowColumns, prefix);
+					// Allow the subclasses to modify the column id.
+					columnId = column.id;
 				}
-				
+				if(isArray){ this.columns[columnId] = column; }
+
 				// add grid reference to each column object for potential use by plugins
 				column.grid = this;
 				if(typeof column.init === "function"){ column.init(); }
@@ -504,7 +513,7 @@ function(kernel, declare, listen, has, put, List, miscUtil){
 			var formatter = this.formatter,
 				formatterScope = this.grid.formatterScope;
 			td.innerHTML = typeof formatter === "string" && formatterScope ?
-				formatterScope[formatter](data, object) : formatter(data, object);
+				formatterScope[formatter](data, object) : this.formatter(data, object);
 		}else if(data != null){
 			td.appendChild(document.createTextNode(data)); 
 		}

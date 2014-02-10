@@ -1,6 +1,6 @@
 define([
 	"intern!tdd",
-	"intern/assert",
+	"intern/chai!assert",
 	"dojo/_base/declare",
 	"dojo/on",
 	"dgrid/Grid",
@@ -39,6 +39,7 @@ define([
 				unexpectedEvent + " fired instead."));
 		});
 
+		document.body.appendChild(grid.domNode);
 		grid.startup();
 		return dfd;
 	}

@@ -95,6 +95,7 @@ function(kernel, declare, lang, Deferred, listen, aspect, put){
 			if (column.set){
 				this._columnsWithSet[column.field] = column;
 			}
+			this.inherited(arguments);
 		},
 		
 		_updateNotifyHandle: function(store){
@@ -107,7 +108,7 @@ function(kernel, declare, lang, Deferred, listen, aspect, put){
 				this._notifyHandle.remove();
 				delete this._notifyHandle;
 			}
-			if(typeof store.notify === "function"){
+			if(store && typeof store.notify === "function"){
 				this._notifyHandle = aspect.after(store, "notify",
 					lang.hitch(this, "_onNotify"), true);
 			}
@@ -152,7 +153,7 @@ function(kernel, declare, lang, Deferred, listen, aspect, put){
 			// summary:
 			//		Get a fresh queryOptions object, also including the current sort
 			var options = lang.delegate(this.queryOptions, {});
-			if(this._sort.length){
+			if(typeof(this._sort) === "function" || this._sort.length){
 				// Prevents SimpleQueryEngine from doing unnecessary "null" sorts (which can
 				// change the ordering in browsers that don't use a stable sort algorithm, eg Chrome)
 				options.sort = this._sort;
@@ -326,11 +327,14 @@ function(kernel, declare, lang, Deferred, listen, aspect, put){
 		
 		newRow: function(){
 			// Override to remove no data message when a new row appears.
+			// Run inherited logic first to prevent confusion due to noDataNode
+			// no longer being present as a sibling.
+			var row = this.inherited(arguments);
 			if(this.noDataNode){
 				put(this.noDataNode, "!");
 				delete this.noDataNode;
 			}
-			return this.inherited(arguments);
+			return row;
 		},
 		removeRow: function(rowElement, justCleanup){
 			var row = {element: rowElement};
