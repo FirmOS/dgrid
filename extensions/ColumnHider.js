@@ -139,6 +139,8 @@ define([
 
 			this.inherited(arguments);
 
+			if (this.hiderDisabled) return;
+
 			if (!hiderMenuNode) {
 				// First run
 				// Assume that if this plugin is used, then columns are hidable.

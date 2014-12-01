@@ -254,6 +254,8 @@ define([
 
 		renderHeader: function () {
 			this.inherited(arguments);
+		  
+		  if (this.resizerDisabled) return;
 
 			var grid = this;
 
